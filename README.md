@@ -1,1 +1,1 @@
-# WeT_Server
+# WeT_SERVER
