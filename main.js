@@ -34,6 +34,6 @@ app.delete(`/:id`, (req, res) => {
   res.send({"result": "DELETE 호출"});
 })
 
-app.listen(3000,  function () {
+app.listen(3000, '192.168.123.7', function () {
     console.log('서버 실행 중...');
 });
