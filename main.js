@@ -4,10 +4,10 @@ var mysql         = require('mysql'),
     path          = require('path'),
     bodyParser    = require('body-parser'),
     fs            = require('fs'),
-    routes        = require('./routes'),
-    user          = require('./routes/user'),
     dbconfig      = require('./config/database.js'),
     connection    = mysql.createConnection(dbconfig);
+let request = require('request');
+let cheerio = require('cheerio');
 
 var app = express();
 
