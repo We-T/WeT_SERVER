@@ -28,12 +28,6 @@ app.put(`/:id`, (req, res) => {
   res.send({"result": "UPDATE 호출"});
 })
 
-app.delete(`/:id`, (req, res) => {
-  console.log(req.params.id);
-  console.log(req.path)
-  res.send({"result": "DELETE 호출"});
-})
-
 app.listen(3000, '192.168.123.7', function () {
     console.log('서버 실행 중...');
 });
