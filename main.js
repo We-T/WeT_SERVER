@@ -29,7 +29,6 @@ app.post('/user/join', function (req, res) {
     var id = req.body.id;
     var pwd = req.body.pwd;
     var phone = req.body.phone;
-    var addr = req.body.addr;
     var name = req.body.name;
     
 
