@@ -33,7 +33,7 @@ app.post('/user/join', function (req, res) {
     
 
     // 삽입을 수행하는 sql문.
-    var sql = 'INSERT INTO member_main (mem_type, id, pwd, phone, addr, name) VALUES (?, ?, ?, ?, ?, ?)';
+    var sql = 'INSERT INTO member_main (mem_type, id, pwd, phone, name) VALUES (?, ?, ?, ?, ?, ?)';
     var params = [mem_type, id, pwd, phone, addr, name];
     
     // sql 문의 ?는 두번째 매개변수로 넘겨진 params의 값으로 치환된다.
