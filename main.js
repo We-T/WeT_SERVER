@@ -19,12 +19,10 @@ var serviceKey = 'p%2BX7gaUwAL7ZCk9tuQCKBphxgCJ4d7moeBFk1StHrffygC7NeEuW68ZuJe6P
 var inquiry = '';
 queryParams = '?' + encodeURIComponent('ServiceKey') + '=' + serviceKey; // 이후에 += 로 계속 파라미터추가하기
 
-app.post(`/`, (req, res) => {
-  console.log(req.body);
-  res.send({"result": "POST 호출"});
+app.post(`/login`, (req, res) => {
 })
 
-app.post('/user/join', function (req, res) {
+app.post('/join', function (req, res) {
     var mem_type = req.body.mem_type;
     var id = req.body.id;
     var pwd = req.body.pwd;
@@ -55,6 +53,8 @@ app.post('/user/join', function (req, res) {
     });
 });
 
+app.post(`/mypage`, (req, res) => {
+})
 
 app.listen(3000, '192.168.123.7', function () {
     console.log('서버 실행 중...');
