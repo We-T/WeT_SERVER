@@ -19,9 +19,6 @@ var serviceKey = 'p%2BX7gaUwAL7ZCk9tuQCKBphxgCJ4d7moeBFk1StHrffygC7NeEuW68ZuJe6P
 var inquiry = '';
 queryParams = '?' + encodeURIComponent('ServiceKey') + '=' + serviceKey; // 이후에 += 로 계속 파라미터추가하기
 
-app.post(`/login`, (req, res) => {
-})
-
 app.post('/join', function (req, res) {
     var type = req.body.type;
     var email = req.body.email;
@@ -53,8 +50,34 @@ app.post('/join', function (req, res) {
     });
 });
 
+app.post(`/login`, (req, res) => {
+    
+});
+
 app.post(`/mypage`, (req, res) => {
-})
+    
+});
+
+app.post(`/mypage/add_family`, (req, res) => {
+    
+});
+
+app.post(`/mypage/my_good_list`, (req, res) => {
+    
+});
+
+app.post(`/mypage/parents_good_list`, (req, res) => {
+    
+});
+
+app.post(`/mypage/trip_record`, (req, res) => {
+    
+});
+
+
+app.post('main', (req, res) => {
+    
+});
 
 app.listen(3000, '192.168.123.7', function () {
     console.log('서버 실행 중...');
