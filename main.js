@@ -23,15 +23,15 @@ app.post(`/login`, (req, res) => {
 })
 
 app.post('/join', function (req, res) {
-    var mem_type = req.body.mem_type;
-    var id = req.body.id;
+    var type = req.body.type;
+    var email = req.body.email;
     var pwd = req.body.pwd;
     var phone = req.body.phone;
     var name = req.body.name;
     
 
     // 삽입을 수행하는 sql문.
-    var sql = 'INSERT INTO member_main (mem_type, id, pwd, phone, name) VALUES (?, ?, ?, ?, ?)';
+    var sql = 'INSERT INTO member_main (type, email, pwd, phone, name) VALUES (?, ?, ?, ?, ?)';
     var params = [mem_type, id, pwd, phone, addr, name];
     
     // sql 문의 ?는 두번째 매개변수로 넘겨진 params의 값으로 치환된다.
