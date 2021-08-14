@@ -20,6 +20,7 @@ var inquiry = '';
 queryParams = '?' + encodeURIComponent('ServiceKey') + '=' + serviceKey; // 이후에 += 로 계속 파라미터추가하기
 
 app.post('/join', function (req, res) {
+    // join, family에 새 튜플 추가
     var type = req.body.type;
     var email = req.body.email;
     var pwd = req.body.pwd;
