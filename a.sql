@@ -1,4 +1,4 @@
-create table `users` (`email` varchar(30), `pwd` varchar(20), `phone` int(11), `name` varchar(10), `type` int(1) not null, primary key(email))default charset=utf8;
+create table `users` (`email` varchar(30), `pwd` varchar(20), `phone` varchar(11) unique key, `name` varchar(10), `type` int(1) not null, primary key(email))default charset=utf8;
 
 create table `family` (`index` int(10) not null auto_increment, `email` varchar(30), `inherence_number` int(8), `type` int(1) not null, primary key(`index`), foreign key (`email`) references users(`email`));
 

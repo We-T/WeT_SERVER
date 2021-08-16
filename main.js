@@ -1,17 +1,23 @@
-var mysql         = require('mysql'),
-    express       = require('express'),
-    http          = require('http'),
-    path          = require('path'),
-    bodyParser    = require('body-parser'),
-    fs            = require('fs'),
-    dbconfig      = require('./config/database.js'),
-    connection    = mysql.createConnection(dbconfig),
-    request       = require('request'),
-    cheerio       = require('cheerio');
+const mysql         = require('mysql'),
+      express       = require('express'),
+      path          = require('path'),
+      bodyParser    = require('body-parser'),
+      fs            = require('fs'),
+      dbconfig      = require('./config/database.js'),
+      connection    = mysql.createConnection(dbconfig),
+      request       = require('request'),
+      cheerio       = require('cheerio'),
+      session       = require('express-session'),
+      mysql_store   = require('express-mysql-session')(session),
+      router        = express.Router();
 
-var app = express();
+var   http          = require('http');
 
-app.use(bodyParser.urlencoded({extended: false}));
+const app = express();
+
+var session_store = new mysql_store(dbconfig);
+
+app.use(bodyParser.urlencoded({extended: true}));
 
 // API
 var url = 'http://api.visitkorea.or.kr/openapi/service/rest/KorService/'; //api 호출 기본 url
@@ -71,6 +77,12 @@ app.post(`/login`, (req, res) => {
                 resultCode = 204;
                 message = '비밀번호가 틀렸습니다!';
             } else {
+                //세션
+                var sess;
+                sess = req.session;
+                sess.username = userEmail;
+                sess.logined = true;
+                
                 resultCode = 200;
                 message = '로그인 성공! ' + result[0].name + '님 환영합니다!';
                 console.log(result);
