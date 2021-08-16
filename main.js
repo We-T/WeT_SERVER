@@ -1,5 +1,6 @@
 const mysql         = require('mysql'),
       express       = require('express'),
+      http          = require('http'),
       path          = require('path'),
       bodyParser    = require('body-parser'),
       fs            = require('fs'),
@@ -11,11 +12,17 @@ const mysql         = require('mysql'),
       mysql_store   = require('express-mysql-session')(session),
       router        = express.Router();
 
-var   http          = require('http');
-
 const app = express();
 
+//세션 미들웨어
 var session_store = new mysql_store(dbconfig);
+app.use(session({
+    secret:"yj305",
+    resave:false,
+    saveUninitialized:true,
+    store: session_store
+}));
+var sess = req.session;
 
 app.use(bodyParser.urlencoded({extended: true}));
 
@@ -46,8 +53,18 @@ app.post('/join', function (req, res) {
         if (err) {
             console.log(err);
         } else {
+            if(type === 1) {
+                var sql = 'insert into family (email, inherence_number, type) VALUES (?, ?, ?)';
+                var inherence_number = phone.substr(3,8); //번호 8자리
+                var params = [email, inherence_number, type];
+                connection.query(sql, params, function(err, result) {
+                    console.log('자녀회원 family테이블에 입력 완료');
+                });
+                
+            }
             resultCode = 200;
             message = '회원가입에 성공했습니다.';
+            
         }
 
         res.json({
@@ -78,14 +95,15 @@ app.post(`/login`, (req, res) => {
                 message = '비밀번호가 틀렸습니다!';
             } else {
                 //세션
-                var sess;
-                sess = req.session;
-                sess.username = userEmail;
+                sess.email = email;
                 sess.logined = true;
                 
                 resultCode = 200;
                 message = '로그인 성공! ' + result[0].name + '님 환영합니다!';
-                console.log(result);
+                
+                sess.save(function(){
+                    res.redirect('/');
+                });
             }
         }
         res.json({
@@ -102,11 +120,19 @@ app.post(`/mypage`, (req, res) => {
     
     var sql = 'select * from family where email = ?';
     
-    connection.query(sql, email, function(err, result) {
-        var resultCode = 404;
-        var message = '에러가 발생했습니다';
-        
-        
+    connection.query(sql, email, function(err, result) {        
+        var inherence_number = result[0].inherence_number;
+        var sql = 'select * from family where inherence_number = ?';
+        connection.query(sql, inherence_number, function(err, result) {
+            if(!err){
+                const newrows=JSON.stringify(result);//DB의 칼럼값을 json으로 형변환
+                fs.writeFileSync('views/mem.json', newrows); //json파일로 만들기
+                console.log(newrows);
+                res.json(rows);
+            } else{
+                console.log('Error while performing Query.', err);
+        }
+        });
         
     });
     
@@ -136,3 +162,5 @@ app.post('main', (req, res) => {
 app.listen(3000, '192.168.123.7', function () {
     console.log('서버 실행 중...');
 });
+
+
