@@ -22,7 +22,6 @@ app.use(session({
     saveUninitialized:true,
     store: session_store
 }));
-var sess = req.session;
 
 app.use(bodyParser.urlencoded({extended: true}));
 
@@ -53,11 +52,11 @@ app.post('/join', function (req, res) {
         if (err) {
             console.log(err);
         } else {
-            if(type === 1) {
-                var sql = 'insert into family (email, inherence_number, type) VALUES (?, ?, ?)';
+            if(type == 1) {
+                var sql2 = 'insert into family (email, inherence_number, type) VALUES (?, ?, ?)';
                 var inherence_number = phone.substr(3,8); //번호 8자리
-                var params = [email, inherence_number, type];
-                connection.query(sql, params, function(err, result) {
+                var params2 = [email, inherence_number, type];
+                connection.query(sql2, params2, function(err, result) {
                     console.log('자녀회원 family테이블에 입력 완료');
                 });
                 
@@ -95,6 +94,7 @@ app.post(`/login`, (req, res) => {
                 message = '비밀번호가 틀렸습니다!';
             } else {
                 //세션
+                var sess = req.session;
                 sess.email = email;
                 sess.logined = true;
                 
@@ -122,36 +122,53 @@ app.post(`/mypage`, (req, res) => {
     
     connection.query(sql, email, function(err, result) {        
         var inherence_number = result[0].inherence_number;
-        var sql = 'select * from family where inherence_number = ?';
-        connection.query(sql, inherence_number, function(err, result) {
+        var sql = 'select * from family where inherence_number = ? and email not in (?)';
+        connection.query(sql, [inherence_number, email], function(err, result) {
             if(!err){
-                const newrows=JSON.stringify(result);//DB의 칼럼값을 json으로 형변환
-                fs.writeFileSync('views/mem.json', newrows); //json파일로 만들기
-                console.log(newrows);
-                res.json(rows);
+                res.json(result); // json처리하나 result자체로 보내나 똑같은 json형식임
             } else{
                 console.log('Error while performing Query.', err);
-        }
+            }
         });
-        
     });
     
 });
 
-app.post(`/mypage/add_family`, (req, res) => {
+app.post(`/mypage/add_family`, (req, res) => { //질문1
     
 });
 
 app.post(`/mypage/my_good_list`, (req, res) => {
+    var email = req.body.email;
     
+    var sql = 'select area_code as code, present_day from good_area where email = ? union select tourist_code as code, present_day from good_tourist where email = ?';
+    
+    connection.query(sql, [email, email], function(err, result) {
+        if(!err){
+            res.json(result);
+        }
+    });
 });
 
-app.post(`/mypage/parents_good_list`, (req, res) => {
+app.post(`/mypage/parents_good_list`, (req, res) => {//아직안함 가족버전으로 해야함
+    var email = req.body.email;
     
+    var sql = 'select area_code as code, present_day from good_area where email = ? union select tourist_code as code, present_day from good_tourist where email = ?';
+    
+    connection.query(sql, [email, email], function(err, result) {
+        res.json(result);
+    });
 });
 
 app.post(`/mypage/trip_record`, (req, res) => {
+    var email = req.body.email;
     
+    var sql = 'select * from trip_plan where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            res.json(result);
+        }
+    });
 });
 
 
