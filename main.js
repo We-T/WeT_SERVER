@@ -101,18 +101,13 @@ app.post(`/login`, (req, res) => {
                 resultCode = 200;
                 message = '로그인 성공! ' + result[0].name + '님 환영합니다!';
                 
-                sess.save(function(){
-                    res.redirect('/');
-                });
+                }
             }
-        }
         res.json({
             'code': resultCode,
             'message': message
         });
-        
     });
-    
 });
 
 app.post(`/mypage`, (req, res) => {
@@ -173,7 +168,7 @@ app.post(`/mypage/trip_record`, (req, res) => {
 
 
 app.post('main', (req, res) => {
-    
+    var email = req.body.email;
 });
 
 app.listen(3000, '192.168.123.7', function () {
