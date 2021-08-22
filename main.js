@@ -145,7 +145,7 @@ app.post(`/mypage/my_good_list`, (req, res) => {
     });
 });
 
-app.post(`/mypage/parents_good_list`, (req, res) => {//아직안함 가족버전으로
+app.post(`/mypage/parents_good_list`, (req, res) => {//아직안함 가족버전
     var email = req.body.email;
     
     var sql = 'select area_code as code, present_day from good_area where email = ? union select tourist_code as code, present_day from good_tourist where email = ?';
