@@ -170,6 +170,13 @@ app.post(`/mypage/trip_record`, (req, res) => {
 app.post('main', (req, res) => {
     var email = req.body.email;
     
+    var sql = 'select * from trip_plan where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            res.json(result);
+        }
+    });
+    
 });
 
 app.listen(3000, '192.168.123.7', function () {
