@@ -169,11 +169,28 @@ app.post(`/mypage/trip_record`, (req, res) => {
 
 app.post('main', (req, res) => {
     var email = req.body.email;
-    
-    var sql = 'select * from trip_plan where email = ?';
+    var inherence_number;
+    var sql = 'select * from family where email = ?';
     connection.query(sql, email, function(err, result) {    
         if(!err) {
-            res.json(result);
+            inherence_number = result.inherence_number;
+        }
+    });
+    var sql = 'select * from family where inherence_number = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            if (result.length >= 2){
+                //부모님이 좋아요한 지역 반환
+            } else if (result.length == 1) {
+                //공통정보만 반환
+                var queryParams = url + 'searchFestival?serviceKey=' + serviceKey + '&MobileOS=ETC&MobileApp=AppTest&arrange=O&eventStartDate=20210901&eventEndDate=20210930&_type=json';
+                request(queryParams, function(err, res, body) {
+                    i (error) {
+                        console.log(error);
+                    }
+                    res.send(body);
+                });
+            }
         }
     });
     
