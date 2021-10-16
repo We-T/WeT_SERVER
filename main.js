@@ -13,6 +13,10 @@ const mysql         = require('mysql'),
       router        = express.Router();
 
 const app = express();
+let today = new Date(); 
+let year = today.getFullYear(); // 년도
+let month = today.getMonth() + 1;  // 월
+let date = today.getDate();  // 날짜
 
 //세션 미들웨어
 var session_store = new mysql_store(dbconfig);
@@ -26,7 +30,7 @@ app.use(session({
 app.use(bodyParser.urlencoded({extended: true}));
 
 // API
-var url = 'http://api.visitkorea.or.kr/openapi/service/rest/KorService/'; //api 호출 기본 url
+var kor_url = 'http://api.visitkorea.or.kr/openapi/service/rest/KorService/'; //api 호출 기본 url
 var serviceKey = 'p%2BX7gaUwAL7ZCk9tuQCKBphxgCJ4d7moeBFk1StHrffygC7NeEuW68ZuJe6Ph%2F5RBAqgcHxZ3pn%2F5PqoXJn9UA%3D%3D';
 var inquiry = '';
 queryParams = '?' + encodeURIComponent('ServiceKey') + '=' + serviceKey; // 이후에 += 로 계속 파라미터추가하기
@@ -60,6 +64,13 @@ app.post('/join', function (req, res) {
                     console.log('자녀회원 family테이블에 입력 완료');
                 });
                 
+            } else if (type == 2) {
+                var sql2 = 'insert into family (email, inherence_number, type) VALUES (?, ?, ?)';
+                var inherence_number = req.body.inherence_number; //번호 8자리
+                var params2 = [email, inherence_number, type];
+                connection.query(sql2, params2, function(err, result) {
+                    console.log('부모회원 family테이블에 입력 완료');
+                });
             }
             resultCode = 200;
             message = '회원가입에 성공했습니다.';
@@ -112,6 +123,7 @@ app.post(`/login`, (req, res) => {
 
 app.post(`/mypage`, (req, res) => {
     var email = req.body.email;
+    var sql_result;
     
     var sql = 'select * from family where email = ?';
     
@@ -129,30 +141,67 @@ app.post(`/mypage`, (req, res) => {
     
 });
 
-app.post(`/mypage/add_family`, (req, res) => { //질문1
-    
-});
-
-app.post(`/mypage/my_good_list`, (req, res) => {
+app.post(`/mypage/add_family`, (req, res) => { 
     var email = req.body.email;
-    
-    var sql = 'select area_code as code, present_day from good_area where email = ? union select tourist_code as code, present_day from good_tourist where email = ?';
-    
-    connection.query(sql, [email, email], function(err, result) {
-        if(!err){
-            res.json(result);
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            res.send(result);
         }
     });
 });
 
-app.post(`/mypage/parents_good_list`, (req, res) => {//아직안함 가족버전
+app.post(`/mypage/my_good_list`, (req, res) => {
     var email = req.body.email;
+    var sql_result;
+    var send_result = {};
     
-    var sql = 'select area_code as code, present_day from good_area where email = ? union select tourist_code as code, present_day from good_tourist where email = ?';
+    var sql = 'select area_code from good_area where email = ? order by present_day desc union select tourist_code as code from good_tourist where email = ? order by present_day desc';
     
     connection.query(sql, [email, email], function(err, result) {
-        res.json(result);
+        if(!err){
+            sql_result = result;
+        }
     });
+    for (let i = 0; i < sql_result.length; i++) {
+        var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+sql_result[i].area_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json';
+        request(queryParams, function(err, res, body) {
+            send_result.i.title = body.items.item.title;
+            send_result.i.addr1 = body.items.item.addr1;
+            send_result.i.firstimage = body.items.item.firstimage;
+        });
+    }
+    res.send(send_result);
+});
+
+app.post(`/mypage/parents_good_list`, (req, res) => {//아직안함 가족버전
+    var email = req.body.email;
+    var inherence_number;
+    var sql_result;
+    var send_result = {};
+    var sql = 'select * from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    var sql = 'select area_code from good_area where inherence_number = ? and not email = ? order by present_day desc union select tourist_code as code from good_tourist where inherence_number = ? and not email = ? order by present_day desc';
+    
+    connection.query(sql, [inherence_number, email, inherence_number, email], function(err, result) {
+        if(!err) {
+            sql_result = result;
+        }
+    });
+    for (let i = 0; i < sql_result.length; i++) {
+        var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+sql_result[i].area_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json';
+        request(queryParams, function(err, res, body) {
+            send_result.i.title = body.items.item.title;
+            send_result.i.addr1 = body.items.item.addr1;
+            send_result.i.firstimage = body.items.item.firstimage;
+        });
+    }
+    res.send(send_result);
 });
 
 app.post(`/mypage/trip_record`, (req, res) => {
@@ -166,34 +215,935 @@ app.post(`/mypage/trip_record`, (req, res) => {
     });
 });
 
-
-app.post('main', (req, res) => {
+app.post('/main', (req, res) => {
     var email = req.body.email;
     var inherence_number;
     var sql = 'select * from family where email = ?';
+    var result_json;
+    
     connection.query(sql, email, function(err, result) {    
         if(!err) {
             inherence_number = result.inherence_number;
         }
     });
     var sql = 'select * from family where inherence_number = ?';
-    connection.query(sql, email, function(err, result) {    
+    connection.query(sql, inherence_number, function(err, result) {    
         if(!err) {
             if (result.length >= 2){
                 //부모님이 좋아요한 지역 반환
-            } else if (result.length == 1) {
-                //공통정보만 반환
-                var queryParams = url + 'searchFestival?serviceKey=' + serviceKey + '&MobileOS=ETC&MobileApp=AppTest&arrange=O&eventStartDate=20210901&eventEndDate=20210930&_type=json';
-                request(queryParams, function(err, res, body) {
-                    i (error) {
-                        console.log(error);
+                var p_good_sql = 'select area_code from good_area where inherence_number = ? order by present_day desc';
+                connection.query(sql, inherence_number, function(err, result) {
+                    if(!err) {
+                        result_json.p_good = result;
                     }
-                    res.send(body);
+                });
+            }
+            //위트가 추천하는 관광지 반환
+            var wet_good_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) group by tourist_code limit 10';
+            connection.query(sql, function(err, result) {
+                if(!err) {
+                    result_json.wet_good = result;
+                }
+            });
+                
+            //tv속 여행지 -> 공통정보에서 랜던 5개
+            var tv_sql = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json';
+            request(tv_sql, function(err, res, body) {
+                if (!err) {
+                    result_json.tv_tour = result;
+                }
+            });
+                
+            //행사정보
+            var queryParams = kor_url + 'searchFestival?ServiceKey=' + serviceKey + '&MobileOS=AND&MobileApp=WeT&arrange=O&eventStartDate=' + year+month+date + '&eventEndDate='+ year+month+'31' +'&_type=json'; //만약 오류나면 월에 상관없이 day가 31이라서 그런거임
+            request(queryParams, function(err, resp, body) {
+                if (!err) {
+                    result_json.festival = body;
+                }
+                res.send(result_json);
+            });   
+        }
+    });
+    
+});
+
+app.post('/search', (req, res) => {
+    var queryParams = kor_url + 'areaCode?ServiceKey=' + serviceKey + '&numOfRows=100&MobileOS=AND&MobileApp=WeT&_type=json';
+    request(queryParams, function(err, resp, body) {
+        if(!err) {
+            //지역은 사진이 없으므로 사진은 기본 이미지 넣어둔 채로 고정
+            res.send(body);
+        }
+    });
+});
+
+app.post('/search/keyword', (req, res) => {
+    var keyword = URLEncoder.encode("req.body.keyword", "UTF-8");
+    var queryParams = kor_url + 'searchKeyword?ServiceKey=' + serviceKey + '&keyword='+keyword+'&numOfRows=10&MobileOS=AND&MobileApp=WeT&_type=json';
+    request(queryParams, function(err, resp, body) {
+        if(!err) {
+            //지역은 사진이 없으므로 사진은 기본 이미지 넣어둔 채로 고정
+            res.send(body.areaCode);
+        }
+    });
+});
+
+app.post('/area/seoul', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 1;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/incheon', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 2;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/daejeon', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 3;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/daegu', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 4;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/kwangju', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 5;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/busan', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 6;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/ulsan', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 7;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/sejong', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 8;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/kyungki', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 31;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/gangwon', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 32;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/chungbuk', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 33;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/chungnam', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 34;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/kyungbuk', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 35;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/kyungnam', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 36;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/jeonbuk', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 37;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/jeonnam', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 38;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(sql, code, function(err, result) {
+        if(!err) {
+            result_json.hot_place = result;
+        }
+    });
+    
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(sql, [code, email], function(err, result) {
+        if(!err) {
+            result_json.my_good = result;
+        }
+    });
+    
+    // 부모님의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            result_json.p_good = result;
+        }
+        res.send(result_json);
+    });
+    
+});
+
+app.post('/area/jeju', (req, res) => {
+    var email = req.body.email;
+    var inherence_number;
+    var code = 39;
+    var result_json;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    // 여행계획에서 해당 지역 여행지가 있다면 출력 없으면 x
+    var plan_sql = 'select trip_name, start_day, end_day where start_day >= ? order by index';
+    connection.query(plan_sql, year+month+date, function(err, result) {
+        if(!err) {
+            result_json.trip_plan = result;
+        }
+    });
+    
+    // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
+    var hot_place_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) where area code = ? group by tourist_code limit 10';
+    connection.query(hot_place_sql, code, function(err, result) {
+        if(!err) {
+            for (var i=0; i <= result.length; i++) {
+                var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+result[i].tourist_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json'; 
+                request(queryParams, function(err, res, body) {
+                    result_json.hot_place.i= result;
                 });
             }
         }
     });
     
+    // 나의 좋아요
+    var my_good_sql = 'select tourist_code from tourist_good where area_code = ? and email = ? order by index;';
+    connection.query(my_good_sql, [code, email], function(err, result) {
+        if(!err) {
+            for (var i=0; i <= result.length; i++) {
+                var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+result[i].tourist_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json'; 
+                request(queryParams, function(err, res, body) {
+                    result_json.my_good.i = result;
+                });
+            }
+        }
+    });
+    
+    // 부모님의 좋아요
+    var p_good_sql = 'select tourist_code from tourist_good where area_code = ? and inherence_number = ? and not email = ? order by index;';
+    connection.query(p_good_sql, [code, inherence_number, email], function(err, result) {
+        if(!err) {
+            for (var i=0; i <= result.length; i++) {
+                var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+result[i].tourist_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json'; 
+                request(queryParams, function(err, res, body) {
+                    result_json.p_good.i = result;
+                    
+                    res.send(result_json);
+                    console.log(result_json);
+                });
+            }
+        }
+        //res.send(result_json);
+    });
+    
+});
+
+app.post('/trip/create', (req, res) => {
+    var trip_name = req.body.trip_name;
+    var start_day = req.body.start_day;
+    var end_day = req.body.end_day;
+    var area = req.body.area;
+    var family = req.body.family;
+    var inherence_number;
+    var type;
+    
+    var sql = 'select inherence_number from family where email = ?';
+    connection.query(sql, email, function(err, result) {    
+        if(!err) {
+            inherence_number = result.inherence_number;
+        }
+    });
+    
+    
+    
+    var main_sql = 'insert into trip_plan (inherence_number, type, trip_name, start_day, end_day, area_code, email)';
+    for (var i=0; i <= family.length; i++) {
+        
+    }
 });
 
 app.listen(3000, '192.168.123.7', function () {
