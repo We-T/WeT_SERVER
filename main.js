@@ -85,7 +85,7 @@ app.post('/join', function (req, res) {
     });
 });
 
-app.post(`/login`, (req, res) => {
+app.post('/login', function (req, res) {
     console.log(req.body.email);
     var email = req.body.email;
     var pwd = req.body.pwd;
@@ -127,9 +127,19 @@ app.post(`/mypage`, (req, res) => {
     var email = req.body.email;
     var sql_result;
     var send_result = {};
-    var inherence_number;
     var name;
+    var type;
+    var profile;
+    var my_good = [];
     
+    var sql = 'select * from users where email = ?';
+    
+    connection.query(sql, email, function(err, result) {        
+        name = result[0].name;
+        type = result[0].type;
+    });
+    
+    /*
     var sql = 'select * from family where email = ?';
     
     connection.query(sql, email, function(err, result) {        
@@ -145,12 +155,15 @@ app.post(`/mypage`, (req, res) => {
             } 
         });
     });
+    */
     
-    var sql = 'select area_code from good_area where email = ? order by present_day desc union select tourist_code as code from good_tourist where email = ? order by present_day desc';
+    var sql2 = 'select tourist_code from good_tourist where email = ? order index desc';
     
-    connection.query(sql, [email, email], function(err, result) {
-        if(!err){
-            sql_result = result;
+    connection.query(sql2, email, function(err, result) {
+        if(err){
+            console.log(err);
+        }else {
+            
         }
     });
     for (let i = 0; i < sql_result.length; i++) {
@@ -161,11 +174,13 @@ app.post(`/mypage`, (req, res) => {
             send_result.i.firstimage = body.items.item.firstimage;
         });
     }
-    res.send(send_result);
+    
+    
+    //res.send(send_result);
     
 });
 
-app.post('/mypage/add_family', (req, res)=> {
+app.post('/mypage/add_family', function (req, res) {
     var email = req.body.email;
     var sql_result;
     var send_result = {};
@@ -202,7 +217,7 @@ app.post('/mypage/add_family', (req, res)=> {
     }); */
 });
 
-app.post(`/mypage/add_family_number`, (req, res) => { 
+app.post('/mypage/add_family_number', function (req, res) { 
     console.log(req.body.email);
     var email = req.body.email;
     var sql = 'select inherence_number from family where email = ?';
@@ -214,7 +229,7 @@ app.post(`/mypage/add_family_number`, (req, res) => {
     });
 });
 
-app.post(`/mypage/my_good_list`, (req, res) => {
+app.post('/mypage/my_good_list', function (req, res) {
     var email = req.body.email;
     var sql_result;
     var send_result = {};
@@ -237,7 +252,7 @@ app.post(`/mypage/my_good_list`, (req, res) => {
     res.send(send_result);
 });
 
-app.post(`/mypage/parents_good_list`, (req, res) => {//아직안함 가족버전
+app.post('/mypage/parents_good_list', function (req, res) {//아직안함 가족버전
     var email = req.body.email;
     var inherence_number;
     var sql_result;
@@ -267,7 +282,7 @@ app.post(`/mypage/parents_good_list`, (req, res) => {//아직안함 가족버전
     res.send(send_result);
 });
 
-app.post(`/mypage/trip_record`, (req, res) => {
+app.post('/mypage/trip_record', function (req, res) {
     var email = req.body.email;
     
     var sql = 'select * from trip_plan where email = ?';
@@ -278,7 +293,7 @@ app.post(`/mypage/trip_record`, (req, res) => {
     });
 });
 
-app.post('/main', (req, res) => {
+app.post('/main', function (req, res) {
     var email = req.body.email;
     var inherence_number;
     var sql = 'select * from family where email = ?';
@@ -331,7 +346,7 @@ app.post('/main', (req, res) => {
 });
 
 /*
-app.post('/search', (req, res) => {
+app.post('/search', function (req, res) {
     var queryParams = kor_url + 'areaCode?ServiceKey=' + serviceKey + '&numOfRows=100&MobileOS=AND&MobileApp=WeT&_type=json';
     request(queryParams, function(err, resp, body) {
         if(!err) {
@@ -342,7 +357,7 @@ app.post('/search', (req, res) => {
 });
 */
 
-app.post('/search/keyword', (req, res) => {
+app.post('/search/keyword', function (req, res) {
     var keyword = urlencode.encode(req.body.keyword, "UTF-8");
     var queryParams = kor_url + 'searchKeyword?ServiceKey=' + serviceKey + '&keyword='+keyword+'&arrange=P&numOfRows=10&MobileOS=AND&MobileApp=WeT&_type=json';
     request(queryParams, function(err, resp, body) {
@@ -354,7 +369,7 @@ app.post('/search/keyword', (req, res) => {
     });
 });
 
-app.post('/area', (req, res) => {
+app.post('/area', function (req, res) {
     var email = req.body.email;
     var area_name = req.body.area_name;
     var inherence_number;
@@ -410,9 +425,11 @@ app.post('/area', (req, res) => {
     
 });
 
-app.post('/area/category')
+app.post('/area/category', function (req, res) {
+    
+});
 
-app.post('/trip/save', (req, res) => {
+app.post('/trip/save', function (req, res) {
     var email = req.body.email;
     var trip_name = req.body.trip_name;
     var start_day = req.body.start_day;
@@ -449,7 +466,7 @@ app.post('/trip/save', (req, res) => {
     }
 });
 
-app.post('/trip/create', (req, res) => {
+app.post('/trip/create', function (req, res) {
     var email = req.body.email;
     var sql_result;
     var send_result = {};
@@ -474,35 +491,35 @@ app.post('/trip/create', (req, res) => {
     });
 });
 
-app.post('/trip/select_area', (req, res) => {
+app.post('/trip/select_area', function (req, res) {
     
 });
 
-app.post('/detail', (req, res) => {
+app.post('/detail', function (req, res) {
     
 });
 
-app.post('/comment_add', (req, res) => {
+app.post('/comment_add', function (req, res) {
     
 });
 
-app.post('/plan' , (req, res) => {
+app.post('/plan' , function (req, res) {
     
 });
 
-app.post('/plan/add', (req, res) => {
+app.post('/plan/add', function (req, res) {
     
 });
 
-app.post('/plan/add/update', (req, res) => {
+app.post('/plan/add/update', function (req, res) {
     
 });
 
-app.post('/plan/title_update', (req, res) => {
+app.post('/plan/title_update', function (req, res) {
     
 });
 
-app.post('/plan/memo', (req, res) => {
+app.post('/plan/memo', function (req, res) {
     
 });
 
