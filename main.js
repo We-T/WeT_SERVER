@@ -12,6 +12,10 @@ const mysql         = require('mysql'),
       mysql_store   = require('express-mysql-session')(session),
       router        = express.Router(),
       urlencode     = require('urlencode');
+const key = require('./keys/key');
+const serviceKey = key.publicKey;
+const searchKeyword = require('./utils/searchKeyword');
+const sql_param_query = require('./utils/sql_param_query');
 
 const app = express();
 let today = new Date(); 
@@ -32,28 +36,11 @@ app.use(bodyParser.urlencoded({extended: true}));
 
 // API
 var kor_url = 'http://api.visitkorea.or.kr/openapi/service/rest/KorService/'; //api 호출 기본 url
-var serviceKey = 'p%2BX7gaUwAL7ZCk9tuQCKBphxgCJ4d7moeBFk1StHrffygC7NeEuW68ZuJe6Ph%2F5RBAqgcHxZ3pn%2F5PqoXJn9UA%3D%3D';
 var inquiry = '';
 queryParams = '?' + encodeURIComponent('ServiceKey') + '=' + serviceKey; // 이후에 += 로 계속 파라미터추가하기
 
-app.post('/pushtest', function (req, res) { 
-    a = {"hi":"hello"};
-    res.json(a);
-});
 
-app.post('/reqtest', function (req, res) { 
-    a = req.body.hi;
-    console.log(a);
-    res.send("성공!")
-});
-
-app.get('/getreqtest', function (req, res) { 
-    a = req.query.hi;
-    console.log(a);
-    res.send("성공!")
-});
-
-app.post('/join', function (req, res) {
+app.post('/join', (req, res) => {
     console.log("회원가입");
     // join, family에 새 튜플 추가
     var type = req.body.type;
@@ -77,7 +64,7 @@ app.post('/join', function (req, res) {
         } else {
             if(type == 1) {
                 var sql2 = 'insert into family (email, inherence_number, type) VALUES (?, ?, ?)';
-                var inherence_number = phone.substr(2,8); //번호 8자리
+                var inherence_number = phone.substr(3,8); //번호 8자리
                 var params2 = [email, inherence_number, type];
                 connection.query(sql2, params2, function(err, result) {
                     console.log('자녀회원 family테이블에 입력 완료');
@@ -103,7 +90,7 @@ app.post('/join', function (req, res) {
     });
 });
 
-app.post('/login', function (req, res) {
+app.post('/login', (req, res) => {
     console.log("로그인");
     var email = req.body.email;
     var pwd = req.body.pwd;
@@ -218,7 +205,47 @@ app.post(`/mypage`, (req, res) => {
     
 });
 
-app.post('/mypage/add_family', function (req, res) {
+app.post('/mypage/add_family', (req, res) => {
+    var email = req.body.email;
+    var family_list = [];
+    var send_result = {};
+    var inherence_number;
+    var name;
+    
+    
+    var sql = 'select * from family where email = ?';
+    sql_param_query(sql, email, (result1) => {
+        var sql2 = 'select email from family where inherence_number = ? and not email = ?';
+        sql_param_query(sql2, [result1[0].inherence_number, email], (result2) => {
+            for (var i =0; i < result2.length; i++) {
+                (function(i) {
+                    var sql3 =  'select * from users where email = ?';
+                    sql_param_query(sql3, result2[i].email, (result3) => {
+                        family_list[i] = {name:result3[0].name, profile:result3[0].profile};
+                        if(family_list.length == result2.length) {
+                            res.json({family_list:family_list});
+                        }
+                    });
+                })(i);
+            }
+        });
+        
+    });
+    /*
+    connection.query(sql, email, function(err, result) {        
+        inherence_number = result[0].inherence_number;
+        var sql = 'select * from family where inherence_number = ? and email not in (?)';
+        connection.query(sql, [inherence_number, email], function(err, result) {
+            if(!err){
+                res.json(result); // json처리하나 result자체로 보내나 똑같은 json형식임
+            } else{
+                console.log('Error while performing Query.', err);
+            }
+        });
+    }); */
+});
+
+/*app.post('/mypage/add_family', (req, res) => {
     var email = req.body.email;
     var family_list = [{"name":"변해식", "profile":"https://cdn.pixabay.com/photo/2016/09/01/08/24/smiley-1635449_1280.png"}, {"name":"전순화", "profile":"https://cdn.pixabay.com/photo/2016/09/01/08/24/smiley-1635449_1280.png"}];
     var send_result = {};
@@ -244,7 +271,6 @@ app.post('/mypage/add_family', function (req, res) {
             } 
         });
     });
-    /*
     connection.query(sql, email, function(err, result) {        
         inherence_number = result[0].inherence_number;
         var sql = 'select * from family where inherence_number = ? and email not in (?)';
@@ -255,10 +281,11 @@ app.post('/mypage/add_family', function (req, res) {
                 console.log('Error while performing Query.', err);
             }
         });
-    }); */
+    });
 });
+*/
 
-app.post('/mypage/add_family_number', function (req, res) { 
+app.post('/mypage/add_family_number', (req, res) => { 
     console.log(req.body.email);
     var email = req.body.email;
     var sql = 'select inherence_number from family where email = ?';
@@ -271,7 +298,7 @@ app.post('/mypage/add_family_number', function (req, res) {
     });
 });
 
-app.post('/mypage/my_good_list', function (req, res) {
+app.post('/mypage/my_good_list', (req, res) => {
     var email = req.body.email;
     var sql_result;
     var send_result = {};
@@ -312,7 +339,7 @@ app.post('/mypage/my_good_list', function (req, res) {
     res.send(temp);
 });
 
-app.post('/mypage/parents_good_list', function (req, res) {//아직안함 가족버전
+app.post('/mypage/parents_good_list', (req, res) => {//아직안함 가족버전
     var email = req.body.email;
     var inherence_number;
     var sql_result;
@@ -361,7 +388,7 @@ app.post('/mypage/parents_good_list', function (req, res) {//아직안함 가족
     res.send(temp);
 });
 
-app.post('/mypage/trip_record', function (req, res) {
+app.post('/mypage/trip_record', (req, res) => {
     var email = req.body.email;
     var temp = {"trip_record_list":[
 		{
@@ -404,12 +431,12 @@ app.post('/mypage/trip_record', function (req, res) {
     res.send(temp);
 });
 
-app.post('/main', function (req, res) {
+app.post('/main', (req, res) => {
     var email = req.body.email;
     var inherence_number;
     var sql = 'select * from family where email = ?';
     var result_json;
-    var temp = {"wet_good":[
+    /*var temp = {"wet_good":[
 		{
 		 "title": "안면도자연휴양림",
 		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/70\/2031770_image2_1.jpg",
@@ -486,7 +513,7 @@ app.post('/main', function (req, res) {
  "profile":"aaa.jpg",
  "type":"1",
  "num_fam":"1"
-};
+};*/
     
     connection.query(sql, email, function(err, result) {    
         if(!err) {
@@ -535,19 +562,52 @@ app.post('/main', function (req, res) {
     
 });
 
-/*
-app.post('/search', function (req, res) {
-    var queryParams = kor_url + 'areaCode?ServiceKey=' + serviceKey + '&numOfRows=100&MobileOS=AND&MobileApp=WeT&_type=json';
-    request(queryParams, function(err, resp, body) {
-        if(!err) {
-            //지역은 사진이 없으므로 사진은 기본 이미지 넣어둔 채로 고정
-            res.send(body);
+app.post('/search/keyword', (req, res) => {
+    var keyword = urlencode.encode(req.body.keyword, "UTF-8");
+    var totalCount; var pageNo; var result_search_keyword = []; var jsontemp={};
+    var sendres = {};
+    
+    searchKeyword(keyword, (body) => {
+        //console.log(body);
+        totalCount = body.totalCount; pageNo = body.pageNo;
+        for (var i=0; i < body.item.length; i++) {
+            result_search_keyword[i] = {title:body.item[i].title, overview:body.item[i].contenttypeid, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage};
         }
+        res.json({
+            totalCount:totalCount,
+            pageNo:pageNo,
+            result_search_keyword: result_search_keyword
+        });
     });
 });
-*/
 
-app.post('/search/keyword', function (req, res) {
+/*app.post('/search/keyword', (req, res) => {
+    var keyword = urlencode.encode(req.body.keyword, "UTF-8");
+    var totalCount; var pageNo; var result_search_keyword = []; var jsontemp={};
+    var sendres = {};
+    
+    var queryParams = kor_url + 'searchKeyword?ServiceKey=' + serviceKey + '&keyword='+keyword+'&arrange=P&numOfRows=10&MobileOS=AND&MobileApp=WeT&_type=json';
+    request(queryParams, (err, resp, body) => {
+        var re = JSON.parse(body);
+        var use = re.response.body.items;
+        if(err) {
+            console.log(err);
+        }
+        for (var i=0; i <= use.length; i++) {
+            result_search_keyword[i] = {"title":use.item[i].title, "overview":use.item[i].overview, "addr1":use.item[i].addr1, "firstimage":use.item[i].firstimage};
+            console.log(use[i]);
+        }
+        
+        console.log(use[0]);
+    });
+    
+    res.json({
+        "result_search_keyword": result_search_keyword,
+        "totalCount":32
+    });
+});*/
+
+/*app.post('/search/keyword', (req, res) => {
     var keyword = urlencode.encode(req.body.keyword, "UTF-8");
     var temp = {"result_search_keyword":[
 		{
@@ -576,9 +636,9 @@ app.post('/search/keyword', function (req, res) {
         }
     });
     res.send(temp);
-});
+});*/
 
-app.post('/area', function (req, res) {
+app.post('/area', (req, res) => {
     var email = req.body.email;
     var area_name = req.body.area_name;
     var inherence_number;
@@ -686,7 +746,7 @@ app.post('/area', function (req, res) {
     res.send(temp);    
 });
 
-app.post('/area/category', function (req, res) {
+app.post('/area/category', (req, res) => {
     var temp = {
 	"p_good_area": [
     {
@@ -702,7 +762,7 @@ app.post('/area/category', function (req, res) {
     res.send(temp);
 });
 
-app.post('/area/keyword', function (req, res) {
+app.post('/area/keyword', (req, res) => {
     var temp = {"result_search_keyword":[
 		{
 		 "title": "제주오성갈치조림",
@@ -723,7 +783,7 @@ app.post('/area/keyword', function (req, res) {
     res.send(temp);
 });
 
-app.post('/trip/save', function (req, res) {
+app.post('/trip/save', (req, res) => {
     var email = req.body.email;
     var trip_name = req.body.trip_name;
     var start_day = req.body.start_day;
@@ -765,7 +825,7 @@ app.post('/trip/save', function (req, res) {
 });
 
 // /mypage/add_family 랑 똑같음
-app.post('/trip/create', function (req, res) { 
+app.post('/trip/create', (req, res) => { 
     var email = req.body.email;
     var sql_result;
     var send_result = {};
@@ -803,7 +863,7 @@ app.post('/trip/create', function (req, res) {
     res.send(temp);
 });
 
-app.post('/trip/select_area', function (req, res) {
+app.post('/trip/select_area', (req, res) => {
     var temp = {
 	"p_good_area": [
     {
@@ -820,34 +880,34 @@ app.post('/trip/select_area', function (req, res) {
 });
 
 //보류
-app.post('/detail', function (req, res) {
+app.post('/detail', (req, res) => {
     
 });
 
-app.post('/comment_add', function (req, res) {
+app.post('/comment_add', (req, res) => {
     res.json({
     "code": 200,
     "message": "리뷰 등록 성공"
     });
 });
 
-app.post('/plan' , function (req, res) {
+app.post('/plan' , (req, res) => {
     
 });
 
-app.post('/plan/add', function (req, res) {
+app.post('/plan/add', (req, res) => {
     
 });
 
-app.post('/plan/add/update', function (req, res) {
+app.post('/plan/add/update', (req, res) => {
     
 });
 
-app.post('/plan/title_update', function (req, res) {
+app.post('/plan/title_update', (req, res) => {
     
 });
 
-app.post('/plan/memo', function (req, res) {
+app.post('/plan/memo', (req, res) => {
     
 });
 
