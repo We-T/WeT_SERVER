@@ -15,13 +15,17 @@ const mysql         = require('mysql'),
 const key = require('./keys/key');
 const serviceKey = key.publicKey;
 const searchKeyword = require('./utils/searchKeyword');
+const detailCommon = require('./utils/detailCommon');
+const searchFestival = require('./utils/searchFestival');
+const defaultRequest = require('./utils/defaultRequest');
 const sql_param_query = require('./utils/sql_param_query');
+const sql_query = require('./utils/sql_query');
 
 const app = express();
 let today = new Date(); 
-let year = today.getFullYear(); // 년도
-let month = today.getMonth() + 1;  // 월
-let date = today.getDate();  // 날짜
+var year = today.getFullYear(); // 년도
+var month = today.getMonth() + 1;  // 월
+var date = today.getDate();  // 날짜
 
 //세션 미들웨어
 var session_store = new mysql_store(dbconfig);
@@ -38,6 +42,8 @@ app.use(bodyParser.urlencoded({extended: true}));
 var kor_url = 'http://api.visitkorea.or.kr/openapi/service/rest/KorService/'; //api 호출 기본 url
 var inquiry = '';
 queryParams = '?' + encodeURIComponent('ServiceKey') + '=' + serviceKey; // 이후에 += 로 계속 파라미터추가하기
+
+// 모든 코드에 대해 결과값이 0일 경우 예외처리 해주기 -> 아직 안함
 
 
 app.post('/join', (req, res) => {
@@ -128,89 +134,55 @@ app.post('/login', (req, res) => {
     });
 });
 
+// OK
 app.post(`/mypage`, (req, res) => {
     var email = req.body.email;
-    var sql_result;
-    var send_result = {};
     var name;
     var type;
     var profile;
     var my_good = [];
-    var temp = {"name": "테스트용",
- "type":1,
- "profile": "aaa.jpg",
- "my_good":[
-		{
-		 "title": "안면도자연휴양림",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/70\/2031770_image2_1.jpg",
-		 "addr1": "충청남도 태안군 안면읍 안면대로 3195-6",
-		 "tag_list" : ["자연", "산"],
-		 "is_good": 1
-		},
-		{
-		 "title": "경기도자박물관",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/08\/919408_image2_1.jpg",
-		 "addr1": "경기도 광주시 곤지암읍 경충대로 727",
-		 "tag_list" : ["자연", "산"],
-		 "is_good": 1
-		}
- ]
-};
+    var tag_list = ["자연", "산"];
+    var is_good = 1;
     
     var sql = 'select * from users where email = ?';
     
-    connection.query(sql, email, function(err, result) {        
+    sql_param_query(sql, email, (result) => {       
         name = result[0].name;
         type = result[0].type;
+        profile = result[0].profile;
     });
-    
-    /*
-    var sql = 'select * from family where email = ?';
-    
-    connection.query(sql, email, function(err, result) {        
-        inherence_number = result[0].inherence_number;
-        var sql = 'select email from family where inherence_number = ? and email not in (?)';
-        connection.query(sql, [inherence_number, email], function(err, result) {
-            if(!err){
-                for (var i =0; i <= result.length; i++) {
-                    var sql2 =  'select name from user where email = ?';
-                    send_result.i = result[i].name;
-                }
-                res.json(send_result); // json처리하나 result자체로 보내나 똑같은 json형식임
-            } 
-        });
-    });
-    */
-    
-    var sql2 = 'select tourist_code from good_tourist where email = ? order index desc';
-    
-    connection.query(sql2, email, function(err, result) {
-        if(err){
-            console.log(err);
-        }else {
-            
+        
+    var sql2 = 'select distinct tourist_code from good_tourist where email = ? order by \'index\' desc';
+    sql_param_query(sql2, email, (result2) => { 
+        var cnt = 0;
+        for (var i =0; i < result2.length; i++) {
+            (function(i) {
+                detailCommon(result2[i].tourist_code, (body) => {
+                    cnt++;
+                    my_good[i] = {title:body.item.title, 
+                                  firstimage:body.item.firstimage, 
+                                  addr1:body.item.addr1, 
+                                  tag_list:tag_list, 
+                                  is_good:is_good};
+                    if (cnt == result2.length) {
+                        res.json({
+                            name:name,
+                            type:type,
+                            profile:profile,
+                            my_good:my_good
+                        });
+                    }
+                });
+            })(i);
         }
     });
-    for (let i = 0; i < sql_result.length; i++) {
-        var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+sql_result[i].area_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json';
-        request(queryParams, function(err, res, body) {
-            send_result.i.title = body.items.item.title;
-            send_result.i.addr1 = body.items.item.addr1;
-            send_result.i.firstimage = body.items.item.firstimage;
-        });
-    }
-    
-    
-    res.send(temp);
     
 });
 
+// OK
 app.post('/mypage/add_family', (req, res) => {
     var email = req.body.email;
     var family_list = [];
-    var send_result = {};
-    var inherence_number;
-    var name;
     
     
     var sql = 'select * from family where email = ?';
@@ -221,7 +193,8 @@ app.post('/mypage/add_family', (req, res) => {
                 (function(i) {
                     var sql3 =  'select * from users where email = ?';
                     sql_param_query(sql3, result2[i].email, (result3) => {
-                        family_list[i] = {name:result3[0].name, profile:result3[0].profile};
+                        family_list[i] = {name:result3[0].name, 
+                                          profile:result3[0].profile};
                         if(family_list.length == result2.length) {
                             res.json({family_list:family_list});
                         }
@@ -229,20 +202,7 @@ app.post('/mypage/add_family', (req, res) => {
                 })(i);
             }
         });
-        
     });
-    /*
-    connection.query(sql, email, function(err, result) {        
-        inherence_number = result[0].inherence_number;
-        var sql = 'select * from family where inherence_number = ? and email not in (?)';
-        connection.query(sql, [inherence_number, email], function(err, result) {
-            if(!err){
-                res.json(result); // json처리하나 result자체로 보내나 똑같은 json형식임
-            } else{
-                console.log('Error while performing Query.', err);
-            }
-        });
-    }); */
 });
 
 /*app.post('/mypage/add_family', (req, res) => {
@@ -285,6 +245,7 @@ app.post('/mypage/add_family', (req, res) => {
 });
 */
 
+// OK
 app.post('/mypage/add_family_number', (req, res) => { 
     console.log(req.body.email);
     var email = req.body.email;
@@ -292,280 +253,228 @@ app.post('/mypage/add_family_number', (req, res) => {
     connection.query(sql, email, function(err, result) {    
         if(!err) {
             a={"inherence_number":result[0].inherence_number};
-            console.log(a);
             res.json(a);
         }
     });
 });
 
+// OK
 app.post('/mypage/my_good_list', (req, res) => {
     var email = req.body.email;
-    var sql_result;
-    var send_result = {};
-    var temp = {"p_good_list":[
-		{
-		 "title": "안면도자연휴양림",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/70\/2031770_image2_1.jpg",
-		 "addr1": "충청남도 태안군 안면읍 안면대로 3195-6",
-		 "tag_list" : ["자연", "산"],
-		 "is_good": 1
-		},
-		{
-		 "title": "경기도자박물관",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/08\/919408_image2_1.jpg",
-		 "addr1": "경기도 광주시 곤지암읍 경충대로 727",
-		 "tag_list" : ["문화", "체험"],
-		 "is_good": 1
-		}
- ]
-};
+    var my_good = [];
+    var tag_list = ["자연", "산"];
+    var is_good = 1;
     
-    var sql = 'select area_code from good_area where email = ? order by present_day desc union select tourist_code as code from good_tourist where email = ? order by present_day desc';
-    
-    connection.query(sql, [email, email], function(err, result) {
-        if(!err){
-            sql_result = result;
+    var sql2 = 'select distinct tourist_code from good_tourist where email = ? order by \'index\' desc';
+    sql_param_query(sql2, email, (result2) => { 
+        var cnt = 0;
+        for (var i =0; i < result2.length; i++) {
+            (function(i) {
+                detailCommon(result2[i].tourist_code, (body) => {
+                    cnt++;
+                    my_good[i] = {title:body.item.title, 
+                                  firstimage:body.item.firstimage, 
+                                  addr1:body.item.addr1, 
+                                  tag_list:tag_list, 
+                                  is_good:is_good};
+                    if (cnt == result2.length) {
+                        res.json({
+                            my_good:my_good
+                        });
+                    }
+                });
+            })(i);
         }
     });
-    for (let i = 0; i < sql_result.length; i++) {
-        var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+sql_result[i].area_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json';
-        request(queryParams, function(err, res, body) {
-            send_result.i.title = body.items.item.title;
-            send_result.i.addr1 = body.items.item.addr1;
-            send_result.i.firstimage = body.items.item.firstimage;
-        });
-    }
-    //res.send(send_result);
-    res.send(temp);
 });
 
+// OK
 app.post('/mypage/parents_good_list', (req, res) => {//아직안함 가족버전
     var email = req.body.email;
     var inherence_number;
-    var sql_result;
-    var send_result = {};
-    var temp = {"p_good_list":[
-		{
-		 "title": "안면도자연휴양림",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/70\/2031770_image2_1.jpg",
-		 "addr1": "충청남도 태안군 안면읍 안면대로 3195-6",
-		 "tag_list" : ["자연", "산"],
-		 "is_good": 1
-		},
-		{
-		 "title": "경기도자박물관",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/08\/919408_image2_1.jpg",
-		 "addr1": "경기도 광주시 곤지암읍 경충대로 727",
-		 "tag_list" : ["문화", "체험"],
-		 "is_good": 1
-		}
- ]
-};
+    var p_good_list = [];
+    var tag_list = ["자연", "산"];
+    var is_good = 1;
     
     var sql = 'select * from family where email = ?';
-    connection.query(sql, email, function(err, result) {    
-        if(!err) {
-            inherence_number = result.inherence_number;
-        }
-    });
-    
-    var sql = 'select area_code from good_area where inherence_number = ? and not email = ? order by present_day desc union select tourist_code as code from good_tourist where inherence_number = ? and not email = ? order by present_day desc';
-    
-    connection.query(sql, [inherence_number, email, inherence_number, email], function(err, result) {
-        if(!err) {
-            sql_result = result;
-        }
-    });
-    for (let i = 0; i < sql_result.length; i++) {
-        var queryParams = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&contentId='+sql_result[i].area_code+'&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json';
-        request(queryParams, function(err, res, body) {
-            send_result.i.title = body.items.item.title;
-            send_result.i.addr1 = body.items.item.addr1;
-            send_result.i.firstimage = body.items.item.firstimage;
+    sql_param_query(sql, email, (result1) => {
+        var sql2 = 'select distinct tourist_code from good_tourist where inherence_number = ? and not email = ? order by \'index\' desc';
+        sql_param_query(sql2, [result1[0].inherence_number, email], (result2) => {
+            var cnt = 0;
+            for (var i =0; i < result2.length; i++) {
+                (function(i) {
+                    detailCommon(result2[i].tourist_code, (body) => {
+                        cnt++;
+                        p_good_list[i] = {title:body.item.title, 
+                                          firstimage:body.item.firstimage, 
+                                          addr1:body.item.addr1, 
+                                          tag_list:tag_list, 
+                                          is_good:is_good};
+                        if (cnt == result2.length) {
+                            res.json({
+                                p_good_list:p_good_list
+                            });
+                        }
+                    });
+                })(i);
+            }
         });
-    }
-    //res.send(send_result);
-    res.send(temp);
+    });
 });
 
+// OK
 app.post('/mypage/trip_record', (req, res) => {
     var email = req.body.email;
-    var temp = {"trip_record_list":[
-		{
-			"trip_name":"사랑하는 엄빠의 제주여행",
-			"start_day":"20210802",
-			"end_day":"20210805",
-			"area_name":"제주도",
-			"attend_famliy":[
-					{"profile":"aaa.jpg"}, 
-					{"profile":"bbb.jpg"}]
-		},
-		{
-			"trip_name":"결혼기념 청주",
-			"start_day":"20210505",
-			"end_day":"20210507",
-			"area_name":"충청북도",
-			"attend_famliy":[
-					{"profile":"aaa.jpg"}, 
-					{"profile":"bbb.jpg"}]
-		},
-		{
-			"trip_name":"여수가족여행",
-			"start_day":"20210305",
-			"end_day":"20210308",
-			"area_name":"전라남도",
-			"attend_famliy":[
-					{"profile":"aaa.jpg"}, 
-					{"profile":"bbb.jpg"},
-					{"profile":"ccc.jpg"}]
-		}
- ]
-};
+    var trip_record_list = [];
+    var attend_famliy = [];
     
-    var sql = 'select * from trip_plan where email = ?';
-    connection.query(sql, email, function(err, result) {    
-        if(!err) {
-            //res.json(result);
+    var sql1 = 'select * from trip_plan where email = ?';
+    sql_param_query(sql1, email, (result1) => {
+        var tripNum = 0;
+        for (var i =0; i < result1.length; i++) {
+            (function(i) {
+                var sql2 = 'select email from trip_plan where index = ? and not email = ?';
+                sql_param_query(sql2, [result1[i].index,email], (result2) => {
+                    tripNum++;
+                    var famNum = 0;
+                    for (var j =0; j < result2.length; j++) {
+                        (function(j) {
+                            var sql3 = 'select profile from users where email = ?';
+                            sql_param_query(sql3, result2[j].email, (result3) => {
+                                famNum++;
+                                attend_famliy[j] = {profile:result3[0].profile};
+                            });
+                            if (famNum == result2.length) {
+                                trip_record_list[i] = {trip_name:result1[i].trip_name, start_day:result1[i].start_day, end_day:result1[i].end_day, area_name:result1[i].area_name,attend_famliy:attend_famliy};
+                            }
+                        })(j);
+                    }
+                });
+                if (tripNum == result1.length) {
+                    res.json({
+                        trip_record_list:trip_record_list
+                    });
+                }
+            })(i);
         }
     });
-    res.send(temp);
 });
 
 app.post('/main', (req, res) => {
     var email = req.body.email;
-    var inherence_number;
-    var sql = 'select * from family where email = ?';
-    var result_json;
-    /*var temp = {"wet_good":[
-		{
-		 "title": "안면도자연휴양림",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/70\/2031770_image2_1.jpg",
-		 "tag_list" : ["자연", "산"]
-		},
-		{
-		 "title": "경기도자박물관",
-		 "firstimage": "http:\/\/tong.visitkorea.or.kr\/cms\/resource\/08\/919408_image2_1.jpg",
-		 "tag_list" : ["문화", "체험"]
-		}
- ],
- "tv_tour":[
-		{
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/29/2755629_image2_1.jpg",
-		 "addr1": "제주특별자치도 서귀포시 중문관광로 27",
-		 "tag_list" : ["관광", "체험"]
-		},
-		{
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/23/2755623_image2_1.jpg",
-		 "addr1": "제주특별자치도 서귀포시 색달중앙로 23",
-		 "tag_list" : ["자연", "산"]
-		}
- ],
- "festival":[
-		{
-		 "title": "제주오성갈치조림",
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/29/2755629_image2_1.jpg",
-		 "addr1": "제주특별자치도 서귀포시 중문관광로 27"
-		},
-		{
-		 "title": "중문통갈치조림구이 색달식당",
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/23/2755623_image2_1.jpg",
-		 "addr1": "제주특별자치도 서귀포시 색달중앙로 23"
-		}
- ],
- "p_good":[
-		{
-		 "title": "제주오성갈치조림",
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/29/2755629_image2_1.jpg",
-		},
-		{
-		 "title": "중문통갈치조림구이 색달식당",
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/23/2755623_image2_1.jpg",
-		}
- ],
- "trip_record_list":[
-		{
-		 "trip_name":"사랑하는 엄빠의 제주여행",
-		 "start_day":"20210802",
-		 "end_day":"20210805",
-		 "attend_famliy":[
-					{"profile":"aaa.jpg"}, 
-					{"profile":"bbb.jpg"}]
-		},
-		{
-		 "trip_name":"결혼기념 청주",
-		 "start_day":"20210505",
-		 "end_day":"20210507",
-		 "attend_famliy":[
-		 		 {"profile":"aaa.jpg"}, 
-				 {"profile":"bbb.jpg"}]
-		},
-		{
-		 "trip_name":"여수가족여행",
-		 "start_day":"20210305",
-		 "end_day":"20210308",
-		 "attend_famliy":[
-		  		{"profile":"aaa.jpg"}, 
-					{"profile":"bbb.jpg"},
-					{"profile":"ccc.jpg"}]
-		}
- ],
- "name":"테스트용",
- "profile":"aaa.jpg",
- "type":"1",
- "num_fam":"1"
-};*/
+    var name; var profile; var type; var num_fam = 0;
+    var inherence_number=75303885;
+    var tag_list = ["자연", "산"];
+    var p_good = []; var trip_record_list = []; var festival = []; var wet_good = []; var tv_tour = [];
+    var attend_famliy = [];
     
-    connection.query(sql, email, function(err, result) {    
-        if(!err) {
-            inherence_number = result.inherence_number;
-        }
+    var sql = 'select * from family where email = ?';
+    sql_param_query(sql, email, (result) => {
+        inherence_number = result[0].inherence_number;
     });
+    
+    var sql = 'select * from users where email = ?';
+    sql_param_query(sql, email, (result) => {     
+        name = result[0].name;
+        type = result[0].type;
+        profile = result[0].profile;
+    });
+    
     var sql = 'select * from family where inherence_number = ?';
-    connection.query(sql, inherence_number, function(err, result) {    
-        if(!err) {
+    sql_param_query(sql, inherence_number, (result) => {  
             if (result.length >= 2){
+                num_fam = 1;
                 //부모님이 좋아요한 지역 반환
-                var p_good_sql = 'select area_code from good_area where inherence_number = ? order by present_day desc';
-                connection.query(sql, inherence_number, function(err, result) {
-                    if(!err) {
-                        result_json.p_good = result;
+                var p_good_sql = 'select distinct tourist_code from good_tourist where inherence_number = ? and not email = ?';
+                sql_param_query(p_good_sql, [inherence_number, email], (result) => { 
+                    for (var i =0; i < result.length; i++) {
+                        (function(i) {
+                            detailCommon(result[i].tourist_code, (body) => {
+                                p_good[i] = {title:body.item.title, 
+                                             firstimage:body.item.firstimage};
+                            });
+                        })(i);
                     }
                 });
             }
             //위트가 추천하는 관광지 반환
-            var wet_good_sql = 'select tourist_code from (select tourist_code from good_tourist order by count(tourist_code) desc) group by tourist_code limit 10';
-            connection.query(sql, function(err, result) {
-                if(!err) {
-                    result_json.wet_good = result;
+            var wet_good_sql = 'select tourist_code from good_tourist group by tourist_code order by \'tourist_code\' limit 10';
+            sql_query(wet_good_sql, (result) => {
+                for(var i = 0; i < result.length; i++) {
+                    (function(i) {
+                        detailCommon(result[i].tourist_code, (body) => {
+                            wet_good[i] = {title:body.item.title, 
+                                               firstimage:body.item.firstimage,
+                                               tag_list:tag_list};
+                        });
+                    })(i);
                 }
             });
                 
-            //tv속 여행지 -> 공통정보에서 랜던 5개
-            var tv_sql = kor_url + 'detailCommon?ServiceKey=' + serviceKey + '&MobileOS=AND&MobileApp=WeT&firstImageYN=Y&defaultYN=Y&_type=json';
-            request(tv_sql, function(err, res, body) {
-                if (!err) {
-                    result_json.tv_tour = result;
+        //tv속 여행지 -> 공통정보에서 랜덤 5개
+        var keyword = urlencode.encode("담양", "UTF-8");
+        var totalCount; var pageNo; var result_search_keyword = [];
+
+        searchKeyword(keyword, (body) => {
+            //console.log(body);
+            totalCount = body.totalCount; pageNo = body.pageNo;
+            for (var i=0; i < body.item.length; i++) {
+                tv_tour[i] = {addr1:body.item[i].addr1, firstimage:body.item[i].firstimage, tag_list:tag_list};
+            }
+        });
+                
+        //행사정보
+        var startD = year.toString()+month.toString()+date.toString(); 
+        var endD = year.toString()+month.toString()+'31';
+            //만약 오류나면 월에 상관없이 day가 31이라서 그런거임
+            searchFestival(startD, endD, (body) => {
+                for (var i=0; i <body.item.length; i++) {
+                    (function(i) {
+                        festival[i] = {title:body.item[i].title, firstimage:body.item[i].firstimage, addr1:body.item[i].addr1};
+                    })(i);
                 }
             });
-                
-            //행사정보
-            var queryParams = kor_url + 'searchFestival?ServiceKey=' + serviceKey + '&MobileOS=AND&MobileApp=WeT&arrange=O&eventStartDate=' + year+month+date + '&eventEndDate='+ year+month+'31' +'&_type=json'; //만약 오류나면 월에 상관없이 day가 31이라서 그런거임
-            request(queryParams, function(err, resp, body) {
-                if (!err) {
-                    result_json.festival = body;
+            
+            var sql1 = 'select * from trip_plan where email = ?';
+            sql_param_query(sql1, email, (result1) => {
+                var tripNum = 0;
+                for (var i =0; i < result1.length; i++) {
+                    (function(i) {
+                        var sql2 = 'select email from trip_plan where index = ? and not email = ?';
+                        sql_param_query(sql2, [result1[i].index,email], (result2) => {
+                            tripNum++;
+                            var famNum = 0;
+                            for (var j =0; j < result2.length; j++) {
+                                (function(j) {
+                                    var sql3 = 'select profile from users where email = ?';
+                                    sql_param_query(sql3, result2[j].email, (result3) => {
+                                        famNum++;
+                                        attend_famliy[j] = {profile:result3[0].profile};
+                                    });
+                                    if (famNum == result2.length) {
+                                        trip_record_list[i] = {trip_name:result1[i].trip_name, start_day:result1[i].start_day, end_day:result1[i].end_day, area_name:result1[i].area_name,attend_famliy:attend_famliy};
+                                    }
+                                })(j);
+                            }
+                        });
+                    })(i);
                 }
-                //res.send(result_json);
-            });   
-        }
+            });
+        
     });
-    res.send(temp);
+    const outpuStr = (wait) => {
+        setTimeout(() => {
+            res.json({wet_good:wet_good, tv_tour:tv_tour, festival:festival, p_good:p_good, trip_record_list:trip_record_list});
     
+        }, wait);
+    };
+    outpuStr(1000);
 });
 
+// OK
 app.post('/search/keyword', (req, res) => {
     var keyword = urlencode.encode(req.body.keyword, "UTF-8");
-    var totalCount; var pageNo; var result_search_keyword = []; var jsontemp={};
-    var sendres = {};
+    var totalCount; var pageNo; var result_search_keyword = [];
     
     searchKeyword(keyword, (body) => {
         //console.log(body);
@@ -579,7 +488,7 @@ app.post('/search/keyword', (req, res) => {
             result_search_keyword: result_search_keyword
         });
     });
-});
+}); 
 
 /*app.post('/search/keyword', (req, res) => {
     var keyword = urlencode.encode(req.body.keyword, "UTF-8");
@@ -762,25 +671,30 @@ app.post('/area/category', (req, res) => {
     res.send(temp);
 });
 
+// OK
 app.post('/area/keyword', (req, res) => {
-    var temp = {"result_search_keyword":[
-		{
-		 "title": "제주오성갈치조림",
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/29/2755629_image2_1.jpg",
-		 "addr1": "제주특별자치도 서귀포시 중문관광로 27",
-		 "category":"음식점"
-		},
-		{
-		 "title": "중문통갈치조림구이 색달식당",
-		 "firstimage": "http://tong.visitkorea.or.kr/cms/resource/23/2755623_image2_1.jpg",
-		 "addr1": "제주특별자치도 서귀포시 색달중앙로 23",
-		 "category":"관광지"
-		}
- ],
- "totalCount":2,
- "pageNo":1
-};
-    res.send(temp);
+    var keyword = urlencode.encode(req.body.keyword, "UTF-8");
+    var area_name = req.body.area_name;
+    var area_code;
+    var totalCount; var pageNo; var result_search_keyword = [];
+    
+    var sql = 'select * from area_code where area_name = ?';
+    sql_param_query(sql, area_name, (result1) => {
+        keyword += '&areaCode='+result1[0].area_code;
+        searchKeyword(keyword, (body) => {
+            //console.log(body);
+            totalCount = body.totalCount; pageNo = body.pageNo;
+            for (var i=0; i < body.item.length; i++) {
+                result_search_keyword[i] = {title:body.item[i].title, overview:body.item[i].contenttypeid, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage};
+            }
+            res.json({
+                totalCount:totalCount,
+                pageNo:pageNo,
+                result_search_keyword: result_search_keyword
+            });
+        });
+    });
+    
 });
 
 app.post('/trip/save', (req, res) => {
