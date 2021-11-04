@@ -11,7 +11,8 @@ const mysql         = require('mysql'),
       session       = require('express-session'),
       mysql_store   = require('express-mysql-session')(session),
       router        = express.Router(),
-      urlencode     = require('urlencode');
+      urlencode     = require('urlencode'),
+      moment        = require('moment');
 const key = require('./keys/key');
 const serviceKey = key.publicKey;
 const searchKeyword = require('./utils/searchKeyword');
@@ -98,7 +99,6 @@ app.post('/join', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-    console.log("로그인");
     var email = req.body.email;
     var pwd = req.body.pwd;
     
@@ -144,7 +144,6 @@ app.post(`/mypage`, (req, res) => {
     var my_good = [];
     var tag_list = ["자연", "산"];
     var is_good = 1;
-    
     var sql = 'select * from users where email = ?';
     
     sql_param_query(sql, email, (result) => {       
@@ -363,6 +362,7 @@ app.post('/mypage/trip_record', (req, res) => {
 
 // OK
 app.post('/main', (req, res) => {
+    console.log(req.body);
     const outpuStr = (wait) => {
         setTimeout(() => {
             res.json({wet_good:wet_good, tv_tour:tv_tour, festival:festival, p_good:p_good, trip_record_list:trip_record_list, name:name, profile:profile, type:type, num_fam:num_fam});
@@ -375,7 +375,6 @@ app.post('/main', (req, res) => {
     var tag_list = ["자연", "산"];
     var p_good = []; var trip_record_list = []; var festival = []; var wet_good = []; var tv_tour = [];
     var attend_famliy = [];
-    
     var sql = 'select * from family where email = ?';
     sql_param_query(sql, email, (result5) => {
         inherence_number = result5[0].inherence_number;
@@ -421,7 +420,6 @@ app.post('/main', (req, res) => {
                 var totalCount; var pageNo; var result_search_keyword = [];
 
                 searchKeyword(keyword, (body) => {
-                    console.log(body);
                     totalCount = body.totalCount; pageNo = body.pageNo;
                     for (var i=0; i < body.item.length; i++) {
                         tv_tour[i] = {addr1:body.item[i].addr1, firstimage:body.item[i].firstimage, tag_list:tag_list};
@@ -445,8 +443,8 @@ app.post('/main', (req, res) => {
                     var tripNum = 0;
                     for (var i =0; i < result1.length; i++) {
                         (function(i) {
-                            var sql2 = 'select email from trip_plan where index = ? and not email = ?';
-                            sql_param_query(sql2, [result1[i].index,email], (result2) => {
+                            var sql2 = 'select email from trip_plan where inherence_number = ? and not email = ?';
+                            sql_param_query(sql2, [inherence_number,email], (result2) => {
                                 tripNum++;
                                 var famNum = 0;
                                 for (var j =0; j < result2.length; j++) {
@@ -455,10 +453,36 @@ app.post('/main', (req, res) => {
                                         sql_param_query(sql3, result2[j].email, (result3) => {
                                             famNum++;
                                             attend_famliy[j] = {profile:result3[0].profile};
+                                            if (famNum == result2.length) {
+                                                var dDay = 'D-';
+                                                var day = result1[i].start_day.substr(4,2);
+                                                day += '.'+result1[i].start_day.substr(6,2);
+                                                day += '~'+result1[i].end_day.substr(4,2)+'.';
+                                                day += result1[i].end_day.substr(6,2);
+                                                if(result1[i].start_day.substr(4,2) == month) {
+                                                    cal = result1[i].start_day.substr(6,2) - date;
+                                                    dDay += cal.toString();
+                                                    if (cal == 0){
+                                                        dDay = 'D-Day';
+                                                    } else if (cal<0) {
+                                                        cal *= -1;
+                                                        dDay ='D+'+cal.toString();
+                                                    }
+                                                } else {
+                                                    var date1 = moment([result1[i].start_day.substr(0,4),result1[i].start_day.substr(4,2), result1[i].start_day.substr(6,2)]);
+                                                    var date2 = moment([year,month,date]);
+                                                    //dDay = date1.diff(date2, 'days');
+                                                    cal = result1[i].start_day.substr(6,2) - date +30;
+                                                    dDay += cal.toString();
+                                                    // 일정짜기 날짜에 갖다 씁시다
+                                                    /*var lastDateOfMonth = ( new Date( result1[i].start_day.substr(0,4), result1[i].start_day.substr(4,2), 0) ).getDate();
+                                                    cal = result1[i].end_day.substr(6,2) + lastDateOfMonth - result1[i].start_day.substr(6,2);
+                                                    dDay += cal.toString();*/
+                                                    
+                                                }
+                                                trip_record_list[i] = {trip_name:result1[i].trip_name, start_day:dDay, end_day:day, attend_famliy:attend_famliy};
+                                            }
                                         });
-                                        if (famNum == result2.length) {
-                                            trip_record_list[i] = {trip_name:result1[i].trip_name, start_day:result1[i].start_day, end_day:result1[i].end_day, area_name:result1[i].area_name,attend_famliy:attend_famliy};
-                                        }
                                     })(j);
                                 }
                             });
@@ -631,18 +655,21 @@ app.post('/area', (req, res) => {
     outpuStr(2000);
 });
 
-// 관광지 카테고리에서 좋아요 여부는 빼는건 어때..? 되는데 처리 시간이 오래걸려서 로딩까지 몇십초 걸림..ㅎ
+// OK
 app.post('/area/category', (req, res) => {
     var email = req.body.email;
+    //if (req.body.email == null) {email = 'child@test.com';}
     var area_name = req.body.area_name;
+    //if (req.body.area_name == 'null') {area_name = '제주도';}
     var category = req.body.category;
+    //if (req.body.category == 'null') {category = '관광지';}
     var pageNo = req.body.pageNo;
-    if (req.body.pageNo == null) {pageNo = '1';}
+    //if (req.body.pageNo == null) {pageNo = '1';}
     var area_list = [];
-    var is_good = 1;
+    var is_good = 0;
     var score = 4.0;
     var contentTypeId; var area_code; var totalCount; var out_pageNo;
-    
+    console.log(req.body);
     var sql = 'select contentTypeId from tag_list where tag = ?';
     sql_param_query(sql, category, (result1) => {
         contentTypeId = result1[0].contentTypeId;
@@ -651,22 +678,27 @@ app.post('/area/category', (req, res) => {
             area_code = result2[0].area_code;
             areaBasedList(contentTypeId, area_code, pageNo, (body) => {
                 totalCount = body.totalCount; out_pageNo = body.pageNo;
+                var tmp = 0;
                 for (var i=0; i<body.item.length; i++) {
-                    var sql3 = 'select count(email) from good_tourist where email = ? and tourist_code = ?';
-                    sql_param_query(sql2, [email, body.item[i].contentid], (result3) => {
-                        console.log(result3);
-                        if (result3[0].count(email) == 0) {
-                            is_good = 1;
-                        }
-                        area_list[i] = {title:body.item[i].title, tag_list:category, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage, is_good:is_good, score:score};
-                    });
-                    
+                    (function(i) {
+                        var sql3 = 'select count(email) as c from good_tourist where email = ? and tourist_code = ?';
+                        sql_param_query(sql3, [email, body.item[i].contentid], (result3) => {
+                            tmp++;
+                            if (result3[0].c == 1) {
+                                is_good = 1;
+                            }
+                            area_list[i] = {title:body.item[i].title, tag_list:category, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage, is_good:is_good, score:score};
+                            if(tmp == body.item.length){
+                                res.json({
+                                    totalCount:totalCount,
+                                    pageNo:pageNo,
+                                    area_list: area_list
+                                });
+
+                            }
+                        });
+                    })(i);                    
                 }
-                res.json({
-                    totalCount:totalCount,
-                    pageNo:pageNo,
-                    area_list: area_list
-                });
             });
         });
     });
@@ -791,7 +823,15 @@ app.post('/comment_add', (req, res) => {
 });
 
 app.post('/plan' , (req, res) => {
+    var email = req.body.email;
+    var trip_name = req.body.trip_name;
+    var trip_code; var type;
+    var sDay = req.body.sDay; var eDay = req.body.eDay;
     
+    var sql = 'select * from trip_plan where trip_nmae = ? and';
+    sql_param_query(sql, [trip_name, email], (result2) => {
+        
+    });
 });
 
 app.post('/plan/add', (req, res) => {
