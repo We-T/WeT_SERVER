@@ -26,8 +26,8 @@ const sql_query = require('./utils/sql_query');
 const app = express();
 let today = new Date(); 
 var year = today.getFullYear(); // 년도
-var month = today.getMonth() + 1;  // 월
-var date = today.getDate();  // 날짜
+var month = ('0' + (today.getMonth() + 1)).slice(-2);  // 월
+var date = ('0' + today.getDate()).slice(-2);  // 날짜
 
 //세션 미들웨어
 var session_store = new mysql_store(dbconfig);
@@ -138,43 +138,17 @@ app.post('/login', (req, res) => {
 // OK
 app.post(`/mypage`, (req, res) => {
     var email = req.body.email;
-    var name;
-    var type;
-    var profile;
-    var my_good = [];
-    var tag_list = ["자연", "산"];
-    var is_good = 1;
     var sql = 'select * from users where email = ?';
     
     sql_param_query(sql, email, (result) => {       
         name = result[0].name;
         type = result[0].type;
         profile = result[0].profile;
-    });
-        
-    var sql2 = 'select distinct tourist_code from good_tourist where email = ? order by \'index\' desc';
-    sql_param_query(sql2, email, (result2) => { 
-        var cnt = 0;
-        for (var i =0; i < result2.length; i++) {
-            (function(i) {
-                detailCommon(result2[i].tourist_code, (body) => {
-                    cnt++;
-                    my_good[i] = {title:body.item.title, 
-                                  firstimage:body.item.firstimage, 
-                                  addr1:body.item.addr1, 
-                                  tag_list:tag_list, 
-                                  is_good:is_good};
-                    if (cnt == result2.length) {
-                        res.json({
-                            name:name,
-                            type:type,
-                            profile:profile,
-                            my_good:my_good
-                        });
-                    }
-                });
-            })(i);
-        }
+        res.json({
+            name:result[0].name,
+            type:result[0].type,
+            profile:result[0].profile
+        });
     });
     
 });
@@ -279,7 +253,7 @@ app.post('/mypage/my_good_list', (req, res) => {
                                                   is_good:is_good};
                                     if (cnt == result2.length) {
                                         res.json({
-                                            my_good:my_good
+                                            my_good_list:my_good
                                         });
                                     }
                                 });
@@ -328,13 +302,66 @@ app.post('/mypage/trip_record', (req, res) => {
     var trip_record_list = [];
     var attend_famliy = [];
     
-    var sql1 = 'select * from trip_plan where email = ?';
+    var sql1 = 'select * from trip_plan where email = ?'; // emali로 trip_plan에서 여행일정 가져옴
     sql_param_query(sql1, email, (result1) => {
         var tripNum = 0;
         for (var i =0; i < result1.length; i++) {
             (function(i) {
-                var sql2 = 'select email from trip_plan where index = ? and not email = ?';
-                sql_param_query(sql2, [result1[i].index,email], (result2) => {
+                var sql2 = 'select email from trip_plan where inherence_number = ? and not email = ?';
+                //
+                sql_param_query(sql2, [inherence_number,email], (result2) => {
+                    tripNum++;
+                    var famNum = 0;
+                    for (var j =0; j < result2.length; j++) {
+                        (function(j) {
+                            var sql3 = 'select profile from users where email = ?';
+                            sql_param_query(sql3, result2[j].email, (result3) => {
+                                famNum++;
+                                attend_famliy[j] = {profile:result3[0].profile};
+                                if (famNum == result2.length) {
+                                    var dDay = 'D-';
+                                    var day = result1[i].start_day.substr(4,2);
+                                    day += '.'+result1[i].start_day.substr(6,2);
+                                    day += '~'+result1[i].end_day.substr(4,2)+'.';
+                                    day += result1[i].end_day.substr(6,2);
+                                    if(result1[i].start_day.substr(4,2) == month) {
+                                        cal = result1[i].start_day.substr(6,2) - date;
+                                        dDay += cal.toString();
+                                        if (cal == 0){
+                                            dDay = 'D-Day';
+                                        } else if (cal<0) {
+                                            cal *= -1;
+                                            dDay ='D+'+cal.toString();
+                                        }
+                                    } else {
+                                        var date1 = moment([result1[i].start_day.substr(0,4),result1[i].start_day.substr(4,2), result1[i].start_day.substr(6,2)]);
+                                        var date2 = moment([year,month,date]);
+                                        //dDay = date1.diff(date2, 'days');
+                                        cal = result1[i].start_day.substr(6,2) - date +30;
+                                        dDay += cal.toString();
+                                        // 일정짜기 날짜에 갖다 씁시다
+                                        /*var lastDateOfMonth = ( new Date( result1[i].start_day.substr(0,4), result1[i].start_day.substr(4,2), 0) ).getDate();
+                                        cal = result1[i].end_day.substr(6,2) + lastDateOfMonth - result1[i].start_day.substr(6,2);
+                                        dDay += cal.toString();*/
+                                        
+                                    }
+                                    trip_record_list[i] = {trip_name:result1[i].trip_name, dDay:dDay, day:day, attend_famliy:attend_famliy};
+                                }
+                            });
+                        })(j);
+                    }
+                });
+            })(i);
+        }
+    });
+
+    /*var sql1 = 'select * from trip_plan where email = ?';
+    sql_param_query(sql1, email, (result1) => {
+        var tripNum = 0;
+        for (var i =0; i < result1.length; i++) {
+            (function(i) {
+                var sql2 = 'select email from trip_plan where trip_plan_code = ? and not email = ?';
+                sql_param_query(sql2, [result1[i].trip_plan_code,email], (result2) => {
                     tripNum++;
                     var famNum = 0;
                     for (var j =0; j < result2.length; j++) {
@@ -350,14 +377,14 @@ app.post('/mypage/trip_record', (req, res) => {
                         })(j);
                     }
                 });
-                if (tripNum == result1.length) {
-                    res.json({
-                        trip_record_list:trip_record_list
-                    });
-                }
+                    if (tripNum == result1.length) {
+                        res.json({
+                            trip_record_list:trip_record_list
+                        });
+                    }
             })(i);
         }
-    });
+    });*/
 });
 
 // OK
@@ -365,7 +392,7 @@ app.post('/main', (req, res) => {
     console.log(req.body);
     const outpuStr = (wait) => {
         setTimeout(() => {
-            res.json({wet_good:wet_good, tv_tour:tv_tour, festival:festival, p_good:p_good, trip_record_list:trip_record_list, name:name, profile:profile, type:type, num_fam:num_fam});
+            res.json({wet_good:wet_good, tv_tour:tv_tour, festival:festival, p_good_list:p_good, trip_record_list:trip_record_list, name:name, profile:profile, type:type, num_fam:num_fam});
     
         }, wait);
     };
@@ -438,12 +465,13 @@ app.post('/main', (req, res) => {
                     }
                 });
 
-                var sql1 = 'select * from trip_plan where email = ?';
+                var sql1 = 'select * from trip_plan where email = ?'; // emali로 trip_plan에서 여행일정 가져옴
                 sql_param_query(sql1, email, (result1) => {
                     var tripNum = 0;
                     for (var i =0; i < result1.length; i++) {
                         (function(i) {
                             var sql2 = 'select email from trip_plan where inherence_number = ? and not email = ?';
+                            //
                             sql_param_query(sql2, [inherence_number,email], (result2) => {
                                 tripNum++;
                                 var famNum = 0;
@@ -480,7 +508,7 @@ app.post('/main', (req, res) => {
                                                     dDay += cal.toString();*/
                                                     
                                                 }
-                                                trip_record_list[i] = {trip_name:result1[i].trip_name, start_day:dDay, end_day:day, attend_famliy:attend_famliy};
+                                                trip_record_list[i] = {trip_name:result1[i].trip_name, dDay:dDay, day:day, attend_famliy:attend_famliy};
                                             }
                                         });
                                     })(j);
@@ -501,16 +529,22 @@ app.post('/search/keyword', (req, res) => {
     var totalCount; var pageNo; var result_search_keyword = [];
     
     searchKeyword(keyword, (body) => {
-        //console.log(body);
         totalCount = body.totalCount; pageNo = body.pageNo;
         for (var i=0; i < body.item.length; i++) {
-            result_search_keyword[i] = {title:body.item[i].title, overview:body.item[i].contenttypeid, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage};
+            (function(i) {
+                var sql = 'select * from tag_list where contentTypeId = ?'
+                sql_param_query(sql, body.item[i].contenttypeid, (result) => {
+                    result_search_keyword[i] = {title:body.item[i].title, overview:result[0].tag, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage};
+                    if (result_search_keyword.length == body.item.length) {
+                        res.json({
+                            totalCount:totalCount,
+                            pageNo:pageNo,
+                            result_search_keyword: result_search_keyword
+                        });
+                    }
+                });
+            })(i);
         }
-        res.json({
-            totalCount:totalCount,
-            pageNo:pageNo,
-            result_search_keyword: result_search_keyword
-        });
     });
 }); 
 
@@ -655,7 +689,7 @@ app.post('/area', (req, res) => {
     outpuStr(2000);
 });
 
-// OK
+// OK -관광지
 app.post('/area/category', (req, res) => {
     var email = req.body.email;
     //if (req.body.email == null) {email = 'child@test.com';}
@@ -715,16 +749,41 @@ app.post('/area/keyword', (req, res) => {
     sql_param_query(sql, area_name, (result1) => {
         keyword += '&areaCode='+result1[0].area_code;
         searchKeyword(keyword, (body) => {
-            //console.log(body);
             totalCount = body.totalCount; pageNo = body.pageNo;
-            for (var i=0; i < body.item.length; i++) {
-                result_search_keyword[i] = {title:body.item[i].title, overview:body.item[i].contenttypeid, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage};
+            if (body.item.length > 1) {
+                for (var i=0; i < body.item.length; i++) {
+                    (function(i) {
+                        var sql2 = 'select * from tag_list where contentTypeId = ?';
+                        sql_param_query(sql2, body.item[i].contenttypeid, (result2) => {
+                            result_search_keyword[i] = {title:body.item[i].title, overview:result2[0].tag, addr1:body.item[i].addr1, firstimage:body.item[i].firstimage};
+                            if (result_search_keyword.length == body.item.length) {
+                                res.json({
+                                    totalCount:totalCount,
+                                    pageNo:pageNo,
+                                    result_search_keyword: result_search_keyword
+                                });
+                            }
+                        });
+                    })(i);
+                }
+            } else {
+                if (body.item) {
+                    var sql2 = 'select * from tag_list where contentTypeId = ?';
+                    sql_param_query(sql2, body.item.contenttypeid, (result2) => {
+                        result_search_keyword[0] = {title:body.item.title, overview:result2[0].tag, addr1:body.item.addr1, firstimage:body.item.firstimage};
+                        res.json({
+                            totalCount:totalCount,
+                            pageNo:pageNo,
+                            result_search_keyword: result_search_keyword
+                        });
+                    });
+                } else {
+                    res.json({
+                        totalCount:totalCount,
+                        pageNo:pageNo
+                    });
+                }
             }
-            res.json({
-                totalCount:totalCount,
-                pageNo:pageNo,
-                result_search_keyword: result_search_keyword
-            });
         });
     });
     
@@ -805,12 +864,35 @@ app.post('/trip/create', (req, res) => {
     });
 });
 
-// 지현이랑 얘기좀 해보기 -> 부모님이 좋아하는 여행지 그냥 없애고 현재 예제에 있는 것정도로만 고정....
+
 app.post('/trip/select_area', (req, res) => {
+    var email = req.body.email;
+    var good_area_list = [];
     
+    var sql = 'select * from family where email = ?';
+    sql_param_query(sql, email, (result1) => {
+        var sql2 = 'select distinct area_code from good_area where inherence_number = ? and not email = ? order by \'index\' desc';
+        sql_param_query(sql2, [result1[0].inherence_number, email], (result2) => {
+            var cnt = 0;
+            for (var i =0; i < result2.length; i++) {
+                (function(i) {
+                    var sql3 =  'select * from area_code where area_code = ?';
+                    sql_param_query(sql3, result2[i].area_code, (result3) => {
+                        var filename = './image/'+result3[0].area_name+'.jpg';
+                        fs.readFile(filename, function(err, data) {
+                            good_area_list[i] = {area_name:result3[0].area_name, firstimage:data};
+                            if(good_area_list.length == result2.length) {
+                                res.json({p_good_area:good_area_list});
+                            }
+                        });
+                    });
+                })(i);
+            }
+        });
+    });    
 });
 
-//보류
+//
 app.post('/detail', (req, res) => {
     
 });
@@ -825,11 +907,13 @@ app.post('/comment_add', (req, res) => {
 app.post('/plan' , (req, res) => {
     var email = req.body.email;
     var trip_name = req.body.trip_name;
-    var trip_code; var type;
-    var sDay = req.body.sDay; var eDay = req.body.eDay;
+    var trip_paln_code; var type;
+    var day = req.body.day;
+    var sDay = '2021'+day.substr(0,2)+day.substr(3,2);
+    var eDay = '2021'+day.substr(6,2)+day.substr(9,2);
     
-    var sql = 'select * from trip_plan where trip_nmae = ? and';
-    sql_param_query(sql, [trip_name, email], (result2) => {
+    var sql = 'select * from trip_plan where trip_name = ?';
+    sql_param_query(sql, trip_name, (result1) => {
         
     });
 });
