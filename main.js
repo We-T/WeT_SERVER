@@ -607,12 +607,19 @@ app.post('/search/keyword', (req, res) => {
 
 // OK
 app.post('/area', (req, res) => {
+    const outpuStr = (wait) => {
+        setTimeout(() => {
+            res.json({type:type, p_good_list:p_good_list, hot_place:hot_place, my_good_list:my_good_list, trip_record:trip_record});
+    
+        }, wait);
+    };
     var email = req.body.email;
     var area_name = req.body.area_name;
     var inherence_number; var area_code;
     var tag_list = ["자연", "산"];
+    var type;
     var p_good_list = []; var trip_record; var my_good_list = []; var hot_place = [];
-    
+    console.log(req.body);
     var area_code_sql = 'select area_code from area_code where area_name = ?';
     sql_param_query(area_code_sql, area_name, (result) => {
         area_code = result[0].area_code;
@@ -620,14 +627,41 @@ app.post('/area', (req, res) => {
         var sql = 'select inherence_number from family where email = ?';
         sql_param_query(sql, email, (result1) => {
             inherence_number = result1[0].inherence_number;
-            
-            var plan_sql = 'select trip_name, start_day, end_day from trip_plan where start_day >= ?';
+            type = result1[0].type;
+            var plan_sql = 'select trip_name, start_day, end_day from trip_plan where email = ? and area_code = ?';
             var startD = year.toString()+month.toString()+date.toString(); 
-            sql_param_query(plan_sql, startD, (result2) => {
-                if (result2.length == 0) {
-                    trip_record = {trip_name:'아직 여행 계획이 없습니다.'};
-                } else if(result2.length > 0) {
-                    trip_record = {trip_name:result2[0].trip_name, start_day:result2[0].start_day, end_day:result2[0].end_day};
+            sql_param_query(plan_sql, [email, area_code], (result2) => {
+                for (var i = 0; i < result2.length; i++) {
+                    (function(i) {
+                        if(result2.length > 0) {
+                            var dDay = 'D-';
+                            var day = result2[i].start_day.substr(4,2);
+                            day += '.'+result2[i].start_day.substr(6,2);
+                            day += '~'+result2[i].end_day.substr(4,2)+'.';
+                            day += result2[i].end_day.substr(6,2);
+                            if(result2[i].start_day.substr(4,2) == month) {
+                                cal = result2[i].start_day.substr(6,2) - date;
+                                dDay += cal.toString();
+                                if (cal == 0){
+                                    dDay = 'D-Day';
+                                } else if (cal<0) {
+                                    cal *= -1;
+                                    dDay ='D+'+cal.toString();
+                                }
+                            } else {
+                                var date1 = moment([result2[i].start_day.substr(0,4),result2[i].start_day.substr(4,2), result2[i].start_day.substr(6,2)]);
+                                var date2 = moment([year,month,date]);
+                                //dDay = date1.diff(date2, 'days');
+                                cal = result2[i].start_day.substr(6,2) - date +30;
+                                dDay += cal.toString();
+                                // 일정짜기 날짜에 갖다 씁시다
+                                /*var lastDateOfMonth = ( new Date( result1[i].start_day.substr(0,4), result1[i].start_day.substr(4,2), 0) ).getDate();
+                                cal = result1[i].end_day.substr(6,2) + lastDateOfMonth - result1[i].start_day.substr(6,2);
+                                dDay += cal.toString();*/
+                            }
+                            trip_record = {trip_name:result2[0].trip_name, dDay:dDay, day:day};
+                        } else {trip_record = {trip_name:'아직 여행 계획이 없습니다.'};}
+                    })(i);
                 }
                 
                 // 핫플레이스 => 좋아요한 관광지 중 지역코드로 검색하여 상위 10개 반환 반환
@@ -658,7 +692,7 @@ app.post('/area', (req, res) => {
                                 }
                             });
                         } else {
-                            p_good_list[0] = {title:'아직 여행 계획이 없습니다'};
+                            p_good_list[0] = {title:'부모님을 추가해주세요'};
                         }
                     });
                     
@@ -678,15 +712,8 @@ app.post('/area', (req, res) => {
                 });
             });
         });
+        outpuStr(3000);
     });
-    
-    const outpuStr = (wait) => {
-        setTimeout(() => {
-            res.json({p_good_list:p_good_list, hot_place:hot_place, my_good_list:my_good_list, trip_record:trip_record});
-    
-        }, wait);
-    };
-    outpuStr(2000);
 });
 
 // OK -관광지
@@ -912,8 +939,8 @@ app.post('/plan' , (req, res) => {
     var sDay = '2021'+day.substr(0,2)+day.substr(3,2);
     var eDay = '2021'+day.substr(6,2)+day.substr(9,2);
     
-    var sql = 'select * from trip_plan where trip_name = ?';
-    sql_param_query(sql, trip_name, (result1) => {
+    var sql = 'select * from trip_plan where trip_name = ? and start_day = ? end_day = ? and email = ?';
+    sql_param_query(sql, [trip_name, sDay, eDay, email], (result1) => {
         
     });
 });
